@@ -9,169 +9,185 @@ import pytest
 from dns.rdatatype import RdataType
 
 from mcstatus.address import Address, async_minecraft_srv_address_lookup, minecraft_srv_address_lookup
+from tests.factories import AddressFactory, StringAddressFactory, StubAddressFactory
 
 
 class TestSRVLookup:
     @pytest.mark.parametrize("exception", [dns.resolver.NXDOMAIN, dns.resolver.NoAnswer])
-    def test_address_no_srv(self, exception):
+    def test_address_no_srv(self, exception, faker):
+        host, port = StubAddressFactory()
         with patch("dns.resolver.resolve") as resolve:
             resolve.side_effect = [exception]
-            address = minecraft_srv_address_lookup("example.org", default_port=25565, lifetime=3)
-            resolve.assert_called_once_with("_minecraft._tcp.example.org", RdataType.SRV, lifetime=3)
+            address = minecraft_srv_address_lookup(host, default_port=port, lifetime=3)
+            resolve.assert_called_once_with(f"_minecraft._tcp.{host}", RdataType.SRV, lifetime=3)
 
-        assert address.host == "example.org"
-        assert address.port == 25565
+        assert address.host == host
+        assert address.port == port
 
-    def test_address_with_srv(self):
+    def test_address_with_srv(self, faker):
+        host, port = StubAddressFactory()
         with patch("dns.resolver.resolve") as resolve:
             answer = Mock()
-            answer.target = "different.example.org."
-            answer.port = 12345
+            answer.target = host
+            answer.port = port
             resolve.return_value = [answer]
 
-            address = minecraft_srv_address_lookup("example.org", lifetime=3)
-            resolve.assert_called_once_with("_minecraft._tcp.example.org", RdataType.SRV, lifetime=3)
-        assert address.host == "different.example.org"
-        assert address.port == 12345
+            address = minecraft_srv_address_lookup(host, lifetime=3)
+            resolve.assert_called_once_with(f"_minecraft._tcp.{host}", RdataType.SRV, lifetime=3)
+        assert address.host == host
+        assert address.port == port
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("exception", [dns.resolver.NXDOMAIN, dns.resolver.NoAnswer])
-    async def test_async_address_no_srv(self, exception):
+    async def test_async_address_no_srv(self, exception, faker):
+        domain, port = StubAddressFactory()
         with patch("dns.asyncresolver.resolve") as resolve:
             resolve.side_effect = [exception]
-            address = await async_minecraft_srv_address_lookup("example.org", default_port=25565, lifetime=3)
-            resolve.assert_called_once_with("_minecraft._tcp.example.org", RdataType.SRV, lifetime=3)
+            address = await async_minecraft_srv_address_lookup(domain, default_port=port, lifetime=3)
+            resolve.assert_called_once_with(f"_minecraft._tcp.{domain}", RdataType.SRV, lifetime=3)
 
-        assert address.host == "example.org"
-        assert address.port == 25565
+        assert address.host == domain
+        assert address.port == port
 
     @pytest.mark.asyncio
-    async def test_async_address_with_srv(self):
+    async def test_async_address_with_srv(self, faker):
+        domain, port = StubAddressFactory()
         with patch("dns.asyncresolver.resolve") as resolve:
             answer = Mock()
-            answer.target = "different.example.org."
-            answer.port = 12345
+            answer.target = domain + "."
+            answer.port = port
             resolve.return_value = [answer]
 
-            address = await async_minecraft_srv_address_lookup("example.org", lifetime=3)
-            resolve.assert_called_once_with("_minecraft._tcp.example.org", RdataType.SRV, lifetime=3)
-        assert address.host == "different.example.org"
-        assert address.port == 12345
+            address = await async_minecraft_srv_address_lookup(domain, lifetime=3)
+            resolve.assert_called_once_with(f"_minecraft._tcp.{domain}", RdataType.SRV, lifetime=3)
+        assert address.host == domain
+        assert address.port == port
 
 
 class TestAddressValidity:
     @pytest.mark.parametrize(
-        "address,port",
+        "method",
         [
-            ("example.org", 25565),
-            ("192.168.0.100", 54321),
-            ("2345:0425:2CA1:0000:0000:0567:5673:23b5", 100),
-            ("2345:0425:2CA1::0567:5673:23b5", 12345),
+            "domain_name",
+            "ipv4",
+            "ipv6",
         ],
     )
-    def test_address_validation_valid(self, address, port):
+    def test_address_validation_valid(self, method, faker):
+        address, port = getattr(faker, method)(), StubAddressFactory().port
         Address._ensure_validity(address, port)
 
     @pytest.mark.parametrize(
-        "address,port,exception",
+        "input,exception",
         [
             # Out of range port
-            ("example.org", 100_000, ValueError),
-            ("example.org", -1, ValueError),
+            ("faker.domain_name(3), faker.pyint(65535, 100_000)", ValueError),
+            ("faker.domain_name(3), -1", ValueError),
             # Invalid types
-            ("example.org", "25565", TypeError),
-            (25565, "example.org", TypeError),
-            (("example.org", 25565), None, TypeError),
-            (0, 0, TypeError),
-            ("", "", TypeError),
+            ("faker.domain_name(3), str(faker.port_number())", TypeError),
+            ("faker.port_number(), faker.domain_name(3)", TypeError),
+            ("(faker.domain_name(3), faker.port_number()), None", TypeError),
+            ("0, 0", TypeError),
+            ("'', ''", TypeError),
         ],
     )
-    def test_address_validation_invalid(self, address, port, exception):
+    def test_address_validation_invalid(self, input, exception, faker):
         with pytest.raises(exception):
-            Address._ensure_validity(address, port)
+            Address._ensure_validity(*eval(input, {"faker": faker}))
 
 
 class TestAddressConstructing:
-    def test_init_constructor(self):
-        addr = Address("example.org", 25565)
-        assert addr.host == "example.org"
-        assert addr.port == 25565
+    def test_init_constructor(self, faker):
+        domain, port = StubAddressFactory()
+        addr = Address(domain, port)
+        assert addr.host == domain
+        assert addr.port == port
 
-    def test_tuple_behavior(self):
-        addr = Address("example.org", 25565)
+    def test_tuple_behavior(self, faker):
+        domain, port = StubAddressFactory()
+        addr = Address(domain, port)
         assert isinstance(addr, tuple)
         assert len(addr) == 2
-        assert addr[0] == "example.org"
-        assert addr[1] == 25565
+        assert addr[0] == domain
+        assert addr[1] == port
 
-    def test_from_tuple_constructor(self):
-        addr = Address.from_tuple(("example.org", 12345))
-        assert addr.host == "example.org"
-        assert addr.port == 12345
+    def test_from_tuple_constructor(self, faker):
+        host, port = StubAddressFactory()
+        addr = Address.from_tuple((host, port))
+        assert addr.host == host
+        assert addr.port == port
 
-    def test_from_path_constructor(self):
-        addr = Address.from_path(Path("example.org:25565"))
-        assert addr.host == "example.org"
-        assert addr.port == 25565
+    def test_from_path_constructor(self, faker):
+        stub_address = StubAddressFactory()
+        addr = Address.from_path(Path(StringAddressFactory.from_stub(stub_address)))
+        assert addr.host == stub_address.host
+        assert addr.port == stub_address.port
 
-    def test_address_with_port_no_default(self):
-        addr = Address.parse_address("example.org:25565")
-        assert addr.host == "example.org"
-        assert addr.port == 25565
+    def test_address_with_port_no_default(self, faker):
+        stub_address = StubAddressFactory()
+        addr = Address.parse_address(StringAddressFactory.from_stub(stub_address))
+        assert addr.host == stub_address.host
+        assert addr.port == stub_address.port
 
-    def test_address_with_port_default(self):
-        addr = Address.parse_address("example.org:25565", default_port=12345)
-        assert addr.host == "example.org"
-        assert addr.port == 25565
+    def test_address_with_port_default(self, faker):
+        host, port = StubAddressFactory()
+        addr = Address.parse_address(host, default_port=port)
+        assert addr.host == host
+        assert addr.port == port
 
-    def test_address_without_port_default(self):
-        addr = Address.parse_address("example.org", default_port=12345)
-        assert addr.host == "example.org"
-        assert addr.port == 12345
+    def test_address_without_port_default(self, faker):
+        domain, port = StubAddressFactory()
+        addr = Address.parse_address(domain, default_port=port)
+        assert addr.host == domain
+        assert addr.port == port
 
-    def test_address_without_port(self):
+    def test_address_without_port(self, faker):
+        domain = faker.domain_name(3)
         with pytest.raises(ValueError):
-            Address.parse_address("example.org")
+            Address.parse_address(domain)
 
-    def test_address_with_invalid_port(self):
+    def test_address_with_invalid_port(self, faker):
         with pytest.raises(ValueError):
-            Address.parse_address("example.org:port")
+            Address.parse_address(f"{faker.domain_name(3)}:{faker.pystr()}")
 
-    def test_address_with_multiple_ports(self):
+    def test_address_with_multiple_ports(self, faker):
+        domain, port1, port2 = *StringAddressFactory().split(":"), faker.port_number()
         with pytest.raises(ValueError):
-            Address.parse_address("example.org:12345:25565")
+            Address.parse_address(f"{domain}:{port1}:{port2}")
 
 
 class TestAddressIPResolving:
-    def setup_method(self):
-        self.host_addr = Address("example.org", 25565)
-        self.ipv4_addr = Address("1.1.1.1", 25565)
-        self.ipv6_addr = Address("::1", 25565)
+    @classmethod
+    @pytest.fixture(autouse=True)
+    def setup(cls, faker):
+        cls.host_addr = AddressFactory()
+        cls.ipv4_addr = Address(faker.ipv4(), faker.port_number())
+        cls.ipv6_addr = Address(faker.ipv6(), faker.port_number())
 
     def test_ip_resolver_with_hostname(self):
         with patch("dns.resolver.resolve") as resolve:
             answer = MagicMock()
-            answer.__str__.return_value = "48.225.1.104."
+            answer.__str__.return_value = self.ipv4_addr.host
             resolve.return_value = [answer]
 
             resolved_ip = self.host_addr.resolve_ip(lifetime=3)
 
             resolve.assert_called_once_with(self.host_addr.host, RdataType.A, lifetime=3)
             assert isinstance(resolved_ip, ipaddress.IPv4Address)
-            assert str(resolved_ip) == "48.225.1.104"
+            assert str(resolved_ip) == self.ipv4_addr.host
 
     @pytest.mark.asyncio
     async def test_async_ip_resolver_with_hostname(self):
         with patch("dns.asyncresolver.resolve") as resolve:
             answer = MagicMock()
-            answer.__str__.return_value = "48.225.1.104."
+            answer.__str__.return_value = self.ipv4_addr.host + "."
             resolve.return_value = [answer]
 
             resolved_ip = await self.host_addr.async_resolve_ip(lifetime=3)
 
             resolve.assert_called_once_with(self.host_addr.host, RdataType.A, lifetime=3)
             assert isinstance(resolved_ip, ipaddress.IPv4Address)
-            assert str(resolved_ip) == "48.225.1.104"
+            assert str(resolved_ip) == self.ipv4_addr.host
 
     def test_ip_resolver_with_ipv4(self):
         with patch("dns.resolver.resolve") as resolve:

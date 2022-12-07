@@ -3,6 +3,7 @@ import time
 from unittest import mock
 
 import pytest
+import json
 
 from mcstatus.address import Address
 from mcstatus.pinger import AsyncServerPinger
@@ -22,47 +23,47 @@ class FakeAsyncConnection(Connection):
 
 
 class TestAsyncServerPinger:
-    def setup_method(self):
-        self.pinger = AsyncServerPinger(
+    @classmethod
+    @pytest.fixture(autouse=True)
+    def setup(cls, faker):
+        cls.pinger = AsyncServerPinger(
             FakeAsyncConnection(),  # type: ignore[arg-type]
-            address=Address("localhost", 25565),
-            version=44,
+            address=Address(faker.domain_name(3), faker.pyint(1, 65535)),
+            version=faker.pyint(),
         )
 
     def test_handshake(self):
         self.pinger.handshake()
 
-        assert self.pinger.connection.flush() == bytearray.fromhex("0F002C096C6F63616C686F737463DD01")
+        assert self.pinger.connection.flush() == bytearray(b'"\x00\x98G\x1b' + self.pinger.address.host.encode("utf-8") + b'\x01\xb5\x01')
 
-    def test_read_status(self):
-        self.pinger.connection.receive(
-            bytearray.fromhex(
-                "7200707B226465736372697074696F6E223A2241204D696E65637261667420536572766572222C22706C6179657273223A7B2"
-                "26D6178223A32302C226F6E6C696E65223A307D2C2276657273696F6E223A7B226E616D65223A22312E382D70726531222C22"
-                "70726F746F636F6C223A34347D7D"
-            )
-        )
+    def test_read_status(self, faker):
+        expected = {
+            "description": faker.sentence(),
+            "players": {"max": faker.pyint(), "online": faker.pyint()},
+            "version": {"name": faker.pystr(), "protocol": faker.pyint()},
+        }
+        input = bytearray(b"r\x00p")
+        input.extend(json.dumps(expected).encode("utf-8"))
+        self.pinger.connection.receive(input)
         status = async_decorator(self.pinger.read_status)()
 
-        assert status.raw == {
-            "description": "A Minecraft Server",
-            "players": {"max": 20, "online": 0},
-            "version": {"name": "1.8-pre1", "protocol": 44},
-        }
+        assert status.raw == expected
         assert self.pinger.connection.flush() == bytearray.fromhex("0100")
 
     def test_read_status_invalid_json(self):
-        self.pinger.connection.receive(bytearray.fromhex("0300017B"))
+        self.pinger.connection.receive(bytearray(b"\x03\x00\x01{"))
         with pytest.raises(IOError):
             async_decorator(self.pinger.test_ping)()
 
-    def test_read_status_invalid_reply(self):
-        self.pinger.connection.receive(
-            bytearray.fromhex(
-                "4F004D7B22706C6179657273223A7B226D6178223A32302C226F6E6C696E65223A307D2C2276657273696F6E223A7B226E616"
-                "D65223A22312E382D70726531222C2270726F746F636F6C223A34347D7D"
-            )
-        )
+    def test_read_status_invalid_reply(self, faker):
+        expected = {
+            "players": {"max": faker.pyint(), "online": faker.pyint()},
+            "version": {"name": faker.pystr(), "protocol": faker.pyint()},
+        }
+        input = bytearray(b"r\x00p")
+        input.extend(json.dumps(expected).encode("ascii"))
+        self.pinger.connection.receive(input)
 
         with pytest.raises(IOError):
             async_decorator(self.pinger.test_ping)()
@@ -80,23 +81,30 @@ class TestAsyncServerPinger:
         assert async_decorator(self.pinger.test_ping)() >= 0
         assert self.pinger.connection.flush() == bytearray.fromhex("09010000000000DD7D1C")
 
-    def test_test_ping_invalid(self):
+    def test_test_ping_invalid(self, faker):
         self.pinger.connection.receive(bytearray.fromhex("011F"))
-        self.pinger.ping_token = 14515484
+        self.pinger.ping_token = faker.pyint()
 
         with pytest.raises(IOError):
             async_decorator(self.pinger.test_ping)()
 
-    def test_test_ping_wrong_token(self):
+    def test_test_ping_wrong_token(self, faker):
         self.pinger.connection.receive(bytearray.fromhex("09010000000000DD7D1C"))
-        self.pinger.ping_token = 12345
+        self.pinger.ping_token = faker.pyint()
 
         with pytest.raises(IOError):
             async_decorator(self.pinger.test_ping)()
 
     @pytest.mark.asyncio
-    async def test_latency_is_real_number(self):
+    async def test_latency_is_real_number(self, faker):
         """`time.perf_counter` returns fractional seconds, we must convert it to milliseconds."""
+        expected = {
+            "description": faker.sentence(),
+            "players": {"max": faker.pyint(), "online": faker.pyint()},
+            "version": {"name": faker.pystr(), "protocol": faker.pyint()},
+        }
+        input = bytearray(b"r\x00p")
+        input.extend(json.dumps(expected).encode("ascii"))
 
         def mocked_read_buffer():
             time.sleep(0.001)
@@ -105,33 +113,19 @@ class TestAsyncServerPinger:
         with mock.patch.object(FakeAsyncConnection, "read_buffer") as mocked:
             mocked.side_effect = mocked_read_buffer
             mocked.return_value.read_varint = lambda: 0  # overwrite `async` here
-            mocked.return_value.read_utf = (
-                lambda: """
-            {
-                "description": "A Minecraft Server",
-                "players": {"max": 20, "online": 0},
-                "version": {"name": "1.8-pre1", "protocol": 44}
-            }
-            """
-            )  # overwrite `async` here
+            mocked.return_value.read_utf = lambda: json.dumps(expected)  # overwrite `async` here
             pinger = AsyncServerPinger(
                 FakeAsyncConnection(),  # type: ignore[arg-type]
-                address=Address("localhost", 25565),
-                version=44,
+                address=Address(faker.domain_name(3), faker.pyint(1, 65535)),
+                version=faker.pyint(),
             )
 
-            pinger.connection.receive(
-                bytearray.fromhex(
-                    "7200707B226465736372697074696F6E223A2241204D696E65637261667420536572766572222C22706C6179657273223A"
-                    "7B226D6178223A32302C226F6E6C696E65223A307D2C2276657273696F6E223A7B226E616D65223A22312E382D70726531"
-                    "222C2270726F746F636F6C223A34347D7D"
-                )
-            )
+            pinger.connection.receive(input)
             # we slept 1ms, so this should be always ~1.
             assert (await pinger.read_status()).latency >= 1
 
     @pytest.mark.asyncio
-    async def test_test_ping_is_in_milliseconds(self):
+    async def test_test_ping_is_in_milliseconds(self, faker):
         """`time.perf_counter` returns fractional seconds, we must convert it to milliseconds."""
 
         def mocked_read_buffer():
@@ -141,12 +135,12 @@ class TestAsyncServerPinger:
         with mock.patch.object(FakeAsyncConnection, "read_buffer") as mocked:
             mocked.side_effect = mocked_read_buffer
             mocked.return_value.read_varint = lambda: 1  # overwrite `async` here
-            mocked.return_value.read_long = lambda: 123456789  # overwrite `async` here
+            mocked.return_value.read_long = faker.pyint  # overwrite `async` here
             pinger = AsyncServerPinger(
                 FakeAsyncConnection(),  # type: ignore[arg-type]
-                address=Address("localhost", 25565),
-                version=44,
-                ping_token=123456789,
+                address=Address(faker.domain_name(3), faker.pyint(1, 65535)),
+                version=faker.pyint(),
+                ping_token=faker.pyint(),
             )
             # we slept 1ms, so this should be always ~1.
             assert await pinger.test_ping() >= 1

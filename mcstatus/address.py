@@ -70,7 +70,7 @@ class Address(_AddressBase):
             raise ValueError(f"Port must be within the allowed range (0-2^16), got {port!r}")
 
     @classmethod
-    def from_tuple(cls, tup: tuple[str, int]) -> Self:
+    def from_tuple(cls, tup: tuple[str, int]) -> Self:  # TODO do we need it, if user can use `Address(*(...))`?
         """Construct the class from a regular tuple of (host, port), commonly used for addresses."""
         return cls(host=tup[0], port=tup[1])
 
