@@ -2,59 +2,58 @@ from __future__ import annotations
 
 import ipaddress
 from pathlib import Path
-from unittest.mock import MagicMock, Mock, patch
 
 import dns.resolver
 import pytest
 from dns.rdatatype import RdataType
 
 from mcstatus.address import Address, async_minecraft_srv_address_lookup, minecraft_srv_address_lookup
+from pytest_mock import MockerFixture
 
 
 class TestSRVLookup:
     @pytest.mark.parametrize("exception", [dns.resolver.NXDOMAIN, dns.resolver.NoAnswer])
-    def test_address_no_srv(self, exception):
-        with patch("dns.resolver.resolve") as resolve:
-            resolve.side_effect = [exception]
-            address = minecraft_srv_address_lookup("example.org", default_port=25565, lifetime=3)
-            resolve.assert_called_once_with("_minecraft._tcp.example.org", RdataType.SRV, lifetime=3)
+    def test_address_no_srv(self, exception, mocker: MockerFixture):
+        resolve = mocker.patch("dns.resolver.resolve", side_effect=exception)
+        address = minecraft_srv_address_lookup("example.org", default_port=25565, lifetime=3)
+        resolve.assert_called_once_with("_minecraft._tcp.example.org", RdataType.SRV, lifetime=3)
 
         assert address.host == "example.org"
         assert address.port == 25565
 
-    def test_address_with_srv(self):
-        with patch("dns.resolver.resolve") as resolve:
-            answer = Mock()
-            answer.target = "different.example.org."
-            answer.port = 12345
-            resolve.return_value = [answer]
+    def test_address_with_srv(self, mocker: MockerFixture):
+        resolve = mocker.patch("dns.resolver.resolve")
+        answer = mocker.stub()
+        answer.target = "different.example.org."
+        answer.port = 12345
+        resolve.return_value = [answer]
 
-            address = minecraft_srv_address_lookup("example.org", lifetime=3)
-            resolve.assert_called_once_with("_minecraft._tcp.example.org", RdataType.SRV, lifetime=3)
+        address = minecraft_srv_address_lookup("example.org", lifetime=3)
+        resolve.assert_called_once_with("_minecraft._tcp.example.org", RdataType.SRV, lifetime=3)
         assert address.host == "different.example.org"
         assert address.port == 12345
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("exception", [dns.resolver.NXDOMAIN, dns.resolver.NoAnswer])
-    async def test_async_address_no_srv(self, exception):
-        with patch("dns.asyncresolver.resolve") as resolve:
-            resolve.side_effect = [exception]
-            address = await async_minecraft_srv_address_lookup("example.org", default_port=25565, lifetime=3)
-            resolve.assert_called_once_with("_minecraft._tcp.example.org", RdataType.SRV, lifetime=3)
+    async def test_async_address_no_srv(self, exception, mocker: MockerFixture):
+        resolve = mocker.patch("dns.asyncresolver.resolve", side_effect=exception)
+        address = await async_minecraft_srv_address_lookup("example.org", default_port=25565, lifetime=3)
+        resolve.assert_called_once_with("_minecraft._tcp.example.org", RdataType.SRV, lifetime=3)
 
         assert address.host == "example.org"
         assert address.port == 25565
 
     @pytest.mark.asyncio
-    async def test_async_address_with_srv(self):
-        with patch("dns.asyncresolver.resolve") as resolve:
-            answer = Mock()
-            answer.target = "different.example.org."
-            answer.port = 12345
-            resolve.return_value = [answer]
+    async def test_async_address_with_srv(self, mocker: MockerFixture):
+        resolve = mocker.patch("dns.asyncresolver.resolve")
+        answer = mocker.stub()
+        answer.target = "different.example.org."
+        answer.port = 12345
+        resolve.return_value = [answer]
 
-            address = await async_minecraft_srv_address_lookup("example.org", lifetime=3)
-            resolve.assert_called_once_with("_minecraft._tcp.example.org", RdataType.SRV, lifetime=3)
+        address = await async_minecraft_srv_address_lookup("example.org", lifetime=3)
+        resolve.assert_called_once_with("_minecraft._tcp.example.org", RdataType.SRV, lifetime=3)
+
         assert address.host == "different.example.org"
         assert address.port == 12345
 
@@ -143,66 +142,70 @@ class TestAddressConstructing:
 
 
 class TestAddressIPResolving:
-    def setup_method(self):
-        self.host_addr = Address("example.org", 25565)
-        self.ipv4_addr = Address("1.1.1.1", 25565)
-        self.ipv6_addr = Address("::1", 25565)
+    @pytest.fixture(scope="class")
+    def host_addr(self):
+        return Address("example.org", 25565)
 
-    def test_ip_resolver_with_hostname(self):
-        with patch("dns.resolver.resolve") as resolve:
-            answer = MagicMock()
-            answer.__str__.return_value = "48.225.1.104."
-            resolve.return_value = [answer]
+    @pytest.fixture(scope="class")
+    def ipv4_addr(self):
+        return Address("1.1.1.1", 25565)
 
-            resolved_ip = self.host_addr.resolve_ip(lifetime=3)
+    @pytest.fixture(scope="class")
+    def ipv6_addr(self):
+        return Address("::1", 25565)
 
-            resolve.assert_called_once_with(self.host_addr.host, RdataType.A, lifetime=3)
-            assert isinstance(resolved_ip, ipaddress.IPv4Address)
-            assert str(resolved_ip) == "48.225.1.104"
+    def test_ip_resolver_with_hostname(self, host_addr: Address, mocker: MockerFixture):
+        resolve = mocker.patch("dns.resolver.resolve")
+        answer = MagicMock()
+        answer.__str__.return_value = "48.225.1.104."
+        resolve.return_value = [answer]
 
-    @pytest.mark.asyncio
-    async def test_async_ip_resolver_with_hostname(self):
-        with patch("dns.asyncresolver.resolve") as resolve:
-            answer = MagicMock()
-            answer.__str__.return_value = "48.225.1.104."
-            resolve.return_value = [answer]
+        resolved_ip = host_addr.resolve_ip(lifetime=3)
+        resolve.assert_called_once_with(host_addr.host, RdataType.A, lifetime=3)
 
-            resolved_ip = await self.host_addr.async_resolve_ip(lifetime=3)
+        assert isinstance(resolved_ip, ipaddress.IPv4Address)
+        assert str(resolved_ip) == "48.225.1.104"
 
-            resolve.assert_called_once_with(self.host_addr.host, RdataType.A, lifetime=3)
-            assert isinstance(resolved_ip, ipaddress.IPv4Address)
-            assert str(resolved_ip) == "48.225.1.104"
+    async def test_async_ip_resolver_with_hostname(self, host_addr: Address, mocker: MockerFixture):
+        resolve = mocker.patch("dns.asyncresolver.resolve")
+        answer = MagicMock()
+        answer.__str__.return_value = "48.225.1.104."
+        resolve.return_value = [answer]
 
-    def test_ip_resolver_with_ipv4(self):
-        with patch("dns.resolver.resolve") as resolve:
-            resolved_ip = self.ipv4_addr.resolve_ip(lifetime=3)
+        resolved_ip = await host_addr.async_resolve_ip(lifetime=3)
+        resolve.assert_called_once_with(host_addr.host, RdataType.A, lifetime=3)
 
-            resolve.assert_not_called()  # Make sure we didn't needlessly try to resolve
-            assert isinstance(resolved_ip, ipaddress.IPv4Address)
-            assert str(resolved_ip) == self.ipv4_addr.host
+        assert isinstance(resolved_ip, ipaddress.IPv4Address)
+        assert str(resolved_ip) == "48.225.1.104"
 
-    @pytest.mark.asyncio
-    async def test_async_ip_resolver_with_ipv4(self):
-        with patch("dns.asyncresolver.resolve") as resolve:
-            resolved_ip = await self.ipv4_addr.async_resolve_ip(lifetime=3)
+    def test_ip_resolver_with_ipv4(self, ipv4_addr: Address, mocker: MockerFixture):
+        resolve = mocker.patch("dns.resolver.resolve")
+        resolved_ip = ipv4_addr.resolve_ip(lifetime=3)
 
-            resolve.assert_not_called()  # Make sure we didn't needlessly try to resolve
-            assert isinstance(resolved_ip, ipaddress.IPv4Address)
-            assert str(resolved_ip) == self.ipv4_addr.host
+        resolve.assert_not_called()  # Make sure we didn't needlessly try to resolve
+        assert isinstance(resolved_ip, ipaddress.IPv4Address)
+        assert str(resolved_ip) == ipv4_addr.host
 
-    def test_ip_resolver_with_ipv6(self):
-        with patch("dns.resolver.resolve") as resolve:
-            resolved_ip = self.ipv6_addr.resolve_ip(lifetime=3)
+    async def test_async_ip_resolver_with_ipv4(self, ipv4_addr: Address, mocker: MockerFixture):
+        resolve = mocker.patch("dns.asyncresolver.resolve")
+        resolved_ip = await ipv4_addr.async_resolve_ip(lifetime=3)
 
-            resolve.assert_not_called()  # Make sure we didn't needlessly try to resolve
-            assert isinstance(resolved_ip, ipaddress.IPv6Address)
-            assert str(resolved_ip) == self.ipv6_addr.host
+        resolve.assert_not_called()  # Make sure we didn't needlessly try to resolve
+        assert isinstance(resolved_ip, ipaddress.IPv4Address)
+        assert str(resolved_ip) == ipv4_addr.host
 
-    @pytest.mark.asyncio
-    async def test_async_ip_resolver_with_ipv6(self):
-        with patch("dns.asyncresolver.resolve") as resolve:
-            resolved_ip = await self.ipv6_addr.async_resolve_ip(lifetime=3)
+    def test_ip_resolver_with_ipv6(self, ipv6_addr: Address, mocker: MockerFixture):
+        resolve = mocker.patch("dns.resolver.resolve")
+        resolved_ip = ipv6_addr.resolve_ip(lifetime=3)
 
-            resolve.assert_not_called()  # Make sure we didn't needlessly try to resolve
-            assert isinstance(resolved_ip, ipaddress.IPv6Address)
-            assert str(resolved_ip) == self.ipv6_addr.host
+        resolve.assert_not_called()  # Make sure we didn't needlessly try to resolve
+        assert isinstance(resolved_ip, ipaddress.IPv6Address)
+        assert str(resolved_ip) == ipv6_addr.host
+
+    async def test_async_ip_resolver_with_ipv6(self, ipv6_addr: Address, mocker: MockerFixture):
+        resolve = mocker.patch("dns.asyncresolver.resolve")
+        resolved_ip = await ipv6_addr.async_resolve_ip(lifetime=3)
+
+        resolve.assert_not_called()  # Make sure we didn't needlessly try to resolve
+        assert isinstance(resolved_ip, ipaddress.IPv6Address)
+        assert str(resolved_ip) == ipv6_addr.host

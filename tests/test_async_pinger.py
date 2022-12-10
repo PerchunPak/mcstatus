@@ -3,6 +3,7 @@ import time
 from unittest import mock
 
 import pytest
+from pytest_mock import MockerFixture
 
 from mcstatus.address import Address
 from mcstatus.pinger import AsyncServerPinger
