@@ -75,6 +75,8 @@ def retry(tries: int, exceptions: tuple[type[BaseException]] = (Exception,)) -> 
 
 
 class DeprecatedReturn(Protocol):
+    """Typing stub for deprecated stub."""
+
     @overload
     def __call__(self, __x: type[T]) -> type[T]:
         ...

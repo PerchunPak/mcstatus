@@ -12,6 +12,8 @@ if TYPE_CHECKING:
 
 
 class ServerQuerier:
+    """Server query class for Java Edition servers."""
+
     MAGIC_PREFIX = bytearray.fromhex("FEFD")
     PADDING = bytearray.fromhex("00000000")
     PACKET_TYPE_CHALLENGE = 9
@@ -63,6 +65,8 @@ class ServerQuerier:
 
 
 class AsyncServerQuerier(ServerQuerier):
+    """Async server query class for Java Edition servers."""
+
     def __init__(self, connection: UDPAsyncSocketConnection):
         # We do this to inform python about self.connection type (it's async)
         super().__init__(connection)  # type: ignore[arg-type]
@@ -88,7 +92,7 @@ class AsyncServerQuerier(ServerQuerier):
         return QueryResponse.from_connection(response)
 
 
-class QueryResponse:
+class QueryResponse:  # noqa: D101
     # THIS IS SO UNPYTHONIC
     # it's staying just because the tests depend on this structure
     class Players:

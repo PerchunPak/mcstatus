@@ -11,20 +11,20 @@ from mcstatus.protocol.connection import Connection, TCPAsyncSocketConnection, T
 if TYPE_CHECKING:
     from typing_extensions import NotRequired, TypeAlias, TypedDict
 
-    class RawResponsePlayer(TypedDict):
+    class RawResponsePlayer(TypedDict):  # noqa: D101
         name: str
         id: str
 
-    class RawResponsePlayers(TypedDict):
+    class RawResponsePlayers(TypedDict):  # noqa: D101
         online: int
         max: int
         sample: NotRequired[list[RawResponsePlayer]]
 
-    class RawResponseVersion(TypedDict):
+    class RawResponseVersion(TypedDict):  # noqa: D101
         name: str
         protocol: int
 
-    class RawResponseDescriptionWhenDict(TypedDict, total=False):
+    class RawResponseDescriptionWhenDict(TypedDict, total=False):  # noqa: D101
         text: str  # only present if translation is set
         translation: str  # same to the above field
         extra: list[RawResponseDescriptionWhenDict]
@@ -38,7 +38,7 @@ if TYPE_CHECKING:
 
     RawResponseDescription: TypeAlias = "RawResponseDescriptionWhenDict | list[RawResponseDescriptionWhenDict] | str"
 
-    class RawResponse(TypedDict):
+    class RawResponse(TypedDict):  # noqa: D101
         description: RawResponseDescription
         players: RawResponsePlayers
         version: RawResponseVersion
@@ -81,6 +81,8 @@ STYLE_MAP = {
 
 
 class ServerPinger:
+    """Java Edition server status getter."""
+
     def __init__(
         self,
         connection: TCPSocketConnection,
@@ -145,6 +147,8 @@ class ServerPinger:
 
 
 class AsyncServerPinger(ServerPinger):
+    """Async Java Edition server status getter."""
+
     def __init__(
         self,
         connection: TCPAsyncSocketConnection,
@@ -195,7 +199,7 @@ class AsyncServerPinger(ServerPinger):
         return (received - sent) * 1000
 
 
-class PingResponse:
+class PingResponse:  # noqa: D101
     # THIS IS SO UNPYTHONIC
     # it's staying just because the tests depend on this structure
     class Players:

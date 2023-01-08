@@ -11,6 +11,8 @@ from mcstatus.address import Address
 
 
 class BedrockServerStatus:
+    """Bedrock Edition server status getter."""
+
     request_status_data = bytes.fromhex(
         # see https://wiki.vg/Raknet_Protocol#Unconnected_Ping
         "01" + "000000000000000000" + "ffff00fefefefefdfdfdfd12345678" + "0000000000000000"  # fmt: skip
@@ -22,6 +24,12 @@ class BedrockServerStatus:
 
     @staticmethod
     def parse_response(data: bytes, latency: float) -> "BedrockStatusResponse":
+        """Parse the response from the server.
+
+        :param data: The data received from the server.
+        :param latency: The latency of the request.
+        :return: The parsed response.
+        """
         data = data[1:]
         name_length = struct.unpack(">H", data[32:34])[0]
         decoded_data = data[34 : 34 + name_length].decode().split(";")
@@ -48,12 +56,22 @@ class BedrockServerStatus:
         )
 
     def read_status(self) -> BedrockStatusResponse:
+        """Read the status of the server and parse it.
+
+        A wrapper around :meth:`._read_status` so it can be easily patched in tests.
+
+        :return: The parsed response.
+        """
         start = perf_counter()
         data = self._read_status()
         end = perf_counter()
         return self.parse_response(data, (end - start) * 1000)
 
     def _read_status(self) -> bytes:
+        """Actually read the status of the server.
+
+        :return: The raw response.
+        """
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         s.settimeout(self.timeout)
 
@@ -63,6 +81,12 @@ class BedrockServerStatus:
         return data
 
     async def read_status_async(self) -> BedrockStatusResponse:
+        """Asynchronously read the status of the server and parse it.
+
+        A wrapper around :meth:`._read_status_async` so it can be easily patched in tests.
+
+        :return: The parsed response.
+        """
         start = perf_counter()
         data = await self._read_status_async()
         end = perf_counter()
@@ -70,6 +94,10 @@ class BedrockServerStatus:
         return self.parse_response(data, (end - start) * 1000)
 
     async def _read_status_async(self) -> bytes:
+        """Actually asynchronously read the status of the server.
+
+        :return: The raw response.
+        """
         stream = None
         try:
             conn = asyncio_dgram.connect(self.address)
@@ -84,7 +112,7 @@ class BedrockServerStatus:
         return data
 
 
-class BedrockStatusResponse:
+class BedrockStatusResponse:  # noqa: D101
     class Version:
         def __init__(self, protocol: int, brand: str, version: str):
             self.protocol = protocol

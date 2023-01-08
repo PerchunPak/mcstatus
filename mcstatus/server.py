@@ -77,7 +77,7 @@ class JavaServer(MCServer):
 
     @classmethod
     async def async_lookup(cls, address: str, timeout: float = 3) -> Self:
-        """Asynchronous alternative to lookup
+        """Asynchronous alternative to lookup.
 
         For more details, check the docstring of the synchronous lookup function.
         """
@@ -90,7 +90,6 @@ class JavaServer(MCServer):
         :param type **kwargs: Passed to a `ServerPinger` instance.
         :return: The latency between the Minecraft Server and you.
         """
-
         with TCPSocketConnection(self.address, self.timeout) as connection:
             return self._retry_ping(connection, **kwargs)
 
@@ -106,7 +105,6 @@ class JavaServer(MCServer):
         :param type **kwargs: Passed to a `AsyncServerPinger` instance.
         :return: The latency between the Minecraft Server and you.
         """
-
         async with TCPAsyncSocketConnection(self.address, self.timeout) as connection:
             return await self._retry_async_ping(connection, **kwargs)
 
@@ -123,7 +121,6 @@ class JavaServer(MCServer):
         :param type **kwargs: Passed to a `ServerPinger` instance.
         :return: Status information in a `PingResponse` instance.
         """
-
         with TCPSocketConnection(self.address, self.timeout) as connection:
             return self._retry_status(connection, **kwargs)
 
@@ -140,7 +137,6 @@ class JavaServer(MCServer):
         :param type **kwargs: Passed to a `AsyncServerPinger` instance.
         :return: Status information in a `PingResponse` instance.
         """
-
         async with TCPAsyncSocketConnection(self.address, self.timeout) as connection:
             return await self._retry_async_status(connection, **kwargs)
 

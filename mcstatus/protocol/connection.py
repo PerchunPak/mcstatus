@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 
 
 def ip_type(address: int | str) -> int | None:
-    """Returns what version of IP a given address is.
+    """Return an IP version.
 
     :return: 4 or 6 depending on the IP version.
     :raises ValueError: IP isn't valid.
@@ -35,7 +35,7 @@ def ip_type(address: int | str) -> int | None:
 
 
 class BaseWriteSync(ABC):
-    """Base synchronous write class"""
+    """Base synchronous write class."""
 
     __slots__ = ()
 
@@ -131,7 +131,7 @@ class BaseWriteSync(ABC):
 
 
 class BaseWriteAsync(ABC):
-    """Base synchronous write class"""
+    """Base asynchronous write class."""
 
     __slots__ = ()
 
@@ -220,15 +220,14 @@ class BaseWriteAsync(ABC):
         await self.write(self._pack("Q", value))
 
     async def write_buffer(self, buffer: "Connection") -> None:
-        """Flush buffer, then write a varint of the length of the buffer's
-        data, then write buffer data."""
+        """Flush buffer, then write a varint of the length of the buffer's data, then write buffer data."""
         data = buffer.flush()
         await self.write_varint(len(data))
         await self.write(data)
 
 
 class BaseReadSync(ABC):
-    """Base synchronous read class"""
+    """Base synchronous read class."""
 
     __slots__ = ()
 
@@ -282,7 +281,7 @@ class BaseReadSync(ABC):
         return self.read(length).decode("utf8")
 
     def read_ascii(self) -> str:
-        """Read self until last value is not zero, then return that decoded with ISO-8859-1"""
+        """Read ``self`` until last value is not zero, then return that decoded with ISO-8859-1."""
         result = bytearray()
         while len(result) == 0 or result[-1] != 0:
             result.extend(self.read(1))
@@ -375,7 +374,7 @@ class BaseReadAsync(ABC):
         return (await self.read(length)).decode("utf8")
 
     async def read_ascii(self) -> str:
-        """Read self until last value is not zero, then return that decoded with ISO-8859-1"""
+        """Read ``self`` until last value is not zero, then return that decoded with ISO-8859-1."""
         result = bytearray()
         while len(result) == 0 or result[-1] != 0:
             result.extend(await self.read(1))
@@ -436,19 +435,19 @@ class BaseConnection:
 
 
 class BaseSyncConnection(BaseConnection, BaseReadSync, BaseWriteSync):
-    """Base synchronous read and write class"""
+    """Base synchronous read and write class."""
 
     __slots__ = ()
 
 
 class BaseAsyncReadSyncWriteConnection(BaseConnection, BaseReadAsync, BaseWriteSync):
-    """Base asynchronous read and synchronous write class"""
+    """Base asynchronous read and synchronous write class."""
 
     __slots__ = ()
 
 
 class BaseAsyncConnection(BaseConnection, BaseReadAsync, BaseWriteAsync):
-    """Base asynchronous read and write class"""
+    """Base asynchronous read and write class."""
 
     __slots__ = ()
 
@@ -493,7 +492,7 @@ class Connection(BaseSyncConnection):
         return result
 
     def copy(self) -> "Connection":
-        """Return a copy of self"""
+        """Return a copy of self."""
         new = self.__class__()
         new.receive(self.received)
         new.write(self.sent)
@@ -506,7 +505,7 @@ class SocketConnection(BaseSyncConnection):
     __slots__ = ("socket",)
 
     def __init__(self) -> None:
-        """Set socket to none"""
+        """Set socket to none."""
         # These will only be None until connect is called, ignore the None type assignment
         self.socket: socket.socket = None  # type: ignore[assignment]
 
@@ -554,7 +553,7 @@ class TCPSocketConnection(SocketConnection):
 
 
 class UDPSocketConnection(SocketConnection):
-    """UDP Connection class"""
+    """UDP Connection class."""
 
     __slots__ = ("addr",)
 
@@ -589,7 +588,7 @@ class UDPSocketConnection(SocketConnection):
 
 
 class TCPAsyncSocketConnection(BaseAsyncReadSyncWriteConnection):
-    """Asynchronous TCP Connection class"""
+    """Asynchronous TCP Connection class."""
 
     __slots__ = ("reader", "writer", "timeout", "_addr")
 
@@ -637,7 +636,7 @@ class TCPAsyncSocketConnection(BaseAsyncReadSyncWriteConnection):
 
 
 class UDPAsyncSocketConnection(BaseAsyncConnection):
-    """Asynchronous UDP Connection class"""
+    """Asynchronous UDP Connection class."""
 
     __slots__ = ("stream", "timeout", "_addr")
 
@@ -670,7 +669,7 @@ class UDPAsyncSocketConnection(BaseAsyncConnection):
         await self.stream.send(data)
 
     def close(self) -> None:
-        """Close self.stream"""
+        """Close ``self.stream``."""
         if self.stream is not None:  # If initialized
             self.stream.close()
 
