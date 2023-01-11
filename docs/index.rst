@@ -15,6 +15,7 @@ Content
 
 	api/basic.rst
 	api/advanced/index.rst
+	api/cli.rst
 	api/internal.rst
 
 

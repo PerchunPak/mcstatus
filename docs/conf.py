@@ -65,6 +65,8 @@ extensions = [
     "sphinx.ext.intersphinx",
     # Used to include .md files:
     "m2r2",
+    # To include `mcstatus -h` output
+    "sphinxcontrib.programoutput",
 ]
 
 autoclass_content = "both"
