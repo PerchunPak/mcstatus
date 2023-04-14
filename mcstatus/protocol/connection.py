@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import socket
 import struct
+import typing
 from abc import ABC, abstractmethod
 from collections.abc import Iterable
 from ctypes import c_int32 as signed_int32
@@ -36,17 +38,13 @@ def ip_type(address: int | str) -> int | None:
         return None
 
 
+@dataclasses.dataclass
 class BaseWriteSync(ABC):
     """Base synchronous write class"""
-
-    __slots__ = ()
 
     @abstractmethod
     def write(self, data: Connection | str | bytearray | bytes) -> None:
         """Write data to ``self``."""
-
-    def __repr__(self) -> str:
-        return f"<{self.__class__.__name__} Object>"
 
     @staticmethod
     def _pack(format_: str, data: int) -> bytes:
@@ -128,17 +126,13 @@ class BaseWriteSync(ABC):
         self.write(data)
 
 
+@dataclasses.dataclass
 class BaseWriteAsync(ABC):
     """Base synchronous write class"""
-
-    __slots__ = ()
 
     @abstractmethod
     async def write(self, data: Connection | str | bytearray | bytes) -> None:
         """Write data to ``self``."""
-
-    def __repr__(self) -> str:
-        return f"<{self.__class__.__name__} Object>"
 
     @staticmethod
     def _pack(format_: str, data: int) -> bytes:
@@ -220,17 +214,13 @@ class BaseWriteAsync(ABC):
         await self.write(data)
 
 
+@dataclasses.dataclass
 class BaseReadSync(ABC):
     """Base synchronous read class"""
-
-    __slots__ = ()
 
     @abstractmethod
     def read(self, length: int) -> bytearray:
         """Read length bytes from ``self``, and return a byte array."""
-
-    def __repr__(self) -> str:
-        return f"<{self.__class__.__name__} Object>"
 
     @staticmethod
     def _unpack(format_: str, data: bytes) -> int:
@@ -245,7 +235,8 @@ class BaseReadSync(ABC):
         """
         result = 0
         for i in range(5):
-            part = self.read(1)[0]
+            read = self.read(1)
+            part = read[0]
             result |= (part & 0x7F) << (7 * i)
             if not part & 0x80:
                 return signed_int32(result).value
@@ -259,7 +250,8 @@ class BaseReadSync(ABC):
         """
         result = 0
         for i in range(10):
-            part = self.read(1)[0]
+            read = self.read(1)
+            part = read[0]
             result |= (part & 0x7F) << (7 * i)
             if not part & 0x80:
                 return signed_int64(result).value
@@ -309,17 +301,13 @@ class BaseReadSync(ABC):
         return result
 
 
+@dataclasses.dataclass
 class BaseReadAsync(ABC):
     """Asynchronous Read connection base class."""
-
-    __slots__ = ()
 
     @abstractmethod
     async def read(self, length: int) -> bytearray:
         """Read length bytes from ``self``, return a byte array."""
-
-    def __repr__(self) -> str:
-        return f"<{self.__class__.__name__} Object>"
 
     @staticmethod
     def _unpack(format_: str, data: bytes) -> int:
@@ -398,13 +386,9 @@ class BaseReadAsync(ABC):
         return result
 
 
+@dataclasses.dataclass
 class BaseConnection:
     """Base Connection class. Implements flush, receive, and remaining."""
-
-    __slots__ = ()
-
-    def __repr__(self) -> str:
-        return f"<{self.__class__.__name__} Object>"
 
     def flush(self) -> bytearray:
         """Raise :exc:`TypeError`, unsupported."""
@@ -419,32 +403,27 @@ class BaseConnection:
         raise TypeError(f"{self.__class__.__name__} does not support remaining()")
 
 
+@dataclasses.dataclass
 class BaseSyncConnection(BaseConnection, BaseReadSync, BaseWriteSync):
     """Base synchronous read and write class"""
 
-    __slots__ = ()
 
-
+@dataclasses.dataclass
 class BaseAsyncReadSyncWriteConnection(BaseConnection, BaseReadAsync, BaseWriteSync):
     """Base asynchronous read and synchronous write class"""
 
-    __slots__ = ()
 
-
+@dataclasses.dataclass
 class BaseAsyncConnection(BaseConnection, BaseReadAsync, BaseWriteAsync):
     """Base asynchronous read and write class"""
 
-    __slots__ = ()
 
-
+@dataclasses.dataclass
 class Connection(BaseSyncConnection):
     """Base connection class."""
 
-    __slots__ = ("sent", "received")
-
-    def __init__(self) -> None:
-        self.sent = bytearray()
-        self.received = bytearray()
+    sent: bytearray = dataclasses.field(default_factory=bytearray)
+    received: bytearray = dataclasses.field(default_factory=bytearray)
 
     def read(self, length: int) -> bytearray:
         """Return :attr:`.received` up to length bytes, then cut received up to that point."""
@@ -483,12 +462,11 @@ class Connection(BaseSyncConnection):
         return new
 
 
+@dataclasses.dataclass
 class SocketConnection(BaseSyncConnection):
     """Socket connection."""
 
-    __slots__ = ("socket",)
-
-    def __init__(self) -> None:
+    def __post_init__(self) -> None:
         # These will only be None until connect is called, ignore the None type assignment
         self.socket: socket.socket = None  # type: ignore[assignment]
 
@@ -505,24 +483,29 @@ class SocketConnection(BaseSyncConnection):
         self.close()
 
 
+@dataclasses.dataclass
 class TCPSocketConnection(SocketConnection):
     """TCP Connection to address. Timeout defaults to 3 seconds."""
 
-    __slots__ = ()
+    _addr: tuple[str | None, int]
+    _timeout: float = 3
+    _debug: typing.Any = None
 
-    def __init__(self, addr: tuple[str | None, int], timeout: float = 3):
-        super().__init__()
-        self.socket = socket.create_connection(addr, timeout=timeout)
+    def __post_init__(self) -> None:
+        self.socket = socket.create_connection(self._addr, timeout=self._timeout)
         self.socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
 
     def read(self, length: int) -> bytearray:
         """Return length bytes read from :attr:`.socket`. Raises :exc:`IOError` when server doesn't respond."""
+        self._debug = [length]
         result = bytearray()
         while len(result) < length:
             new = self.socket.recv(length - len(result))
+            self._debug.append(new)
             if len(new) == 0:
                 raise IOError("Server did not respond with any information!")
             result.extend(new)
+        self._debug.append(result)
         return result
 
     def write(self, data: Connection | str | bytes | bytearray) -> None:
@@ -534,19 +517,19 @@ class TCPSocketConnection(SocketConnection):
         self.socket.send(data)
 
 
+@dataclasses.dataclass
 class UDPSocketConnection(SocketConnection):
     """UDP Connection class"""
 
-    __slots__ = ("addr",)
+    addr: Address
+    _timeout: float = 3
 
-    def __init__(self, addr: Address, timeout: float = 3):
-        super().__init__()
-        self.addr = addr
+    def __post_init__(self) -> None:
         self.socket = socket.socket(
-            socket.AF_INET if ip_type(addr[0]) == 4 else socket.AF_INET6,
+            socket.AF_INET if ip_type(self.addr[0]) == 4 else socket.AF_INET6,
             socket.SOCK_DGRAM,
         )
-        self.socket.settimeout(timeout)
+        self.socket.settimeout(self._timeout)
 
     def remaining(self) -> int:
         """Always return ``65535`` (``2 ** 16 - 1``)."""
@@ -568,17 +551,17 @@ class UDPSocketConnection(SocketConnection):
         self.socket.sendto(data, self.addr)
 
 
+@dataclasses.dataclass
 class TCPAsyncSocketConnection(BaseAsyncReadSyncWriteConnection):
     """Asynchronous TCP Connection class"""
 
-    __slots__ = ("reader", "writer", "timeout", "_addr")
+    _addr: Address
+    timeout: float = 3
 
-    def __init__(self, addr: Address, timeout: float = 3) -> None:
+    def __post_init__(self) -> None:
         # These will only be None until connect is called, ignore the None type assignment
         self.reader: asyncio.StreamReader = None  # type: ignore[assignment]
         self.writer: asyncio.StreamWriter = None  # type: ignore[assignment]
-        self.timeout: float = timeout
-        self._addr = addr
 
     async def connect(self) -> None:
         """Use :mod:`asyncio` to open a connection to address. Timeout is in seconds."""
@@ -616,16 +599,16 @@ class TCPAsyncSocketConnection(BaseAsyncReadSyncWriteConnection):
         self.close()
 
 
+@dataclasses.dataclass
 class UDPAsyncSocketConnection(BaseAsyncConnection):
     """Asynchronous UDP Connection class"""
 
-    __slots__ = ("stream", "timeout", "_addr")
+    _addr: Address
+    timeout: float = 3
 
-    def __init__(self, addr: Address, timeout: float = 3) -> None:
+    def __post_init__(self) -> None:
         # This will only be None until connect is called, ignore the None type assignment
         self.stream: asyncio_dgram.aio.DatagramClient = None  # type: ignore[assignment]
-        self.timeout: float = timeout
-        self._addr = addr
 
     async def connect(self) -> None:
         """Connect to address. Timeout is in seconds."""
