@@ -22,17 +22,40 @@ jobs:
         python-version: ["3.8", "3.11"]
 
     services:
-        vanilla:
-            image: itzg/minecraft-server
-            env:
-              TYPE: VANILLA
-              EULA: "TRUE"
-            options: >-
-              --health-cmd pg_isready
-              --health-interval 10s
-              --health-timeout 5s
-              --health-retries 5
-
+      vanilla-1.19:
+        image: itzg/minecraft-server
+        env:
+          TYPE: VANILLA
+          VERSION: 1.8
+          EULA: TRUE
+          SERVER_PORT: 25565
+      
+      vanilla-1.12:
+        image: itzg/minecraft-server
+        env:
+          TYPE: VANILLA
+          VERSION: 1.8
+          EULA: TRUE
+          SERVER_PORT: 25566
+      
+      vanilla-1.8:
+        image: itzg/minecraft-server
+        env:
+          TYPE: VANILLA
+          VERSION: 1.8
+          EULA: TRUE
+          SERVER_PORT: 25567
+      
+      paper:
+        image: itzg/minecraft-server
+        env:
+          TYPE: PAPER
+          EULA: TRUE
+          SERVER_PORT: 25568
+        options: >-
+      --lol
+      
+      
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3

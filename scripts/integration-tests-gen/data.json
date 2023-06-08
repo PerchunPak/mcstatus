@@ -6,5 +6,13 @@
         "env": {
             "TYPE": "VANILLA"
         }
+    },
+    {
+        "id": "paper",
+        "image": "itzg/minecraft-server",
+        "env": {
+            "TYPE": "PAPER"
+        },
+        "options": ["--lol"]
     }
 ]

@@ -50,6 +50,7 @@ if t.TYPE_CHECKING:
         versions: te.NotRequired[list[str]]
         env: te.NotRequired[dict[str, str]]
         options: te.NotRequired[list[str]]
+
 else:
     MinecraftCoreData = {}
 
@@ -74,31 +75,33 @@ class ServiceInfo:
             assert len(data["versions"]) > 0 and data["image"] == "itzg/minecraft-server"
         else:
             data["versions"] = [None]
-            
+
         for version in data["versions"]:
-            id = data["id"] + (f"-{version}" if version else '')
+            id = data["id"] + (f"-{version}" if version else "")
 
             if version:
                 data.setdefault("env", {})
                 data["env"]["VERSION"] = version
-            
+
             if data["image"] == "itzg/minecraft-server":
                 data.setdefault("env", {})
                 data["env"]["EULA"] = "TRUE"
 
-            output.append(cls(
-                id=id,
-                image=data["image"],
-                env=data.get("env"),
-                options=data.get("options"),
-            ))
-            
+            output.append(
+                cls(
+                    id=id,
+                    image=data["image"],
+                    env=data.get("env"),
+                    options=data.get("options"),
+                )
+            )
+
         return output
 
     def attach_port(self, port: int) -> None:
         if self.image == "itzg/minecraft-server":
             self.env = {} if self.env is None else self.env
-            self.env["SERVER_PORT"] = str(port)        
+            self.env["SERVER_PORT"] = str(port)
         else:
             assert self.env is not None
             for key, value in self.env.items():
@@ -106,36 +109,63 @@ class ServiceInfo:
 
     def to_yaml(self) -> str:
         output = f"{self.id}:\n"
-        output += f"    image: {self.image}\n"
+        output += f"  image: {self.image}\n"
 
         if self.env:
-            output += f"    env:\n"
+            output += "  env:\n"
             for key, value in self.env.items():
-                output += f"      {key}: {value}\n"
+                output += f"    {key}: {value}\n"
 
         if self.options:
-            output += f"    options: >-\n"
-            output += f"\n              ".join(self.options) + "\n"
+            output += "  options: >-\n            "
+            output += "\n            ".join(self.options) + "\n"
 
         return output
 
 
-def write_yaml_file(services: str) -> None:
-    with open(CI_FILE, "r") as f:
-        ci_file = f.read()
-    
+class FileWriter:
+    def __init__(self, new_text: str) -> None:
+        self.new_text = new_text
 
+    def write(self) -> None:
+        self.new_text = self._add_tabs_to_generated_data()
+        to_replace = self._get_text_to_replace()
+        self._write_the_result(to_replace)
+
+    def _add_tabs_to_generated_data(self, tabs_count: int = 3) -> str:
+        output = ""
+        for line in self.new_text.split("\n"):
+            output += "  " * tabs_count + line + "\n"
+        return output
+
+    def _get_text_to_replace(self) -> str:
+        old_text = ""
+        active = False
+        with CI_FILE.open("r") as f:
+            for line in f.readlines():
+                if line == "    services:\n":
+                    assert not active, "Two times declared services?"
+                    active = True
+                elif line == "    steps:\n":
+                    break
+                elif active:
+                    old_text += line
+        return old_text
+
+    def _write_the_result(self, old_text: str) -> None:
+        with CI_FILE.open("r") as f:
+            entire_text = f.read()
+        with CI_FILE.open("w") as f:
+            f.write(entire_text.replace(old_text, self.new_text))
 
 
 def get_yaml_files_hash():
     """Calculate a hash of all the yaml configuration files"""
 
     hasher = hashlib.md5()
-    path_pattern = (OUT_DIR / "test-integration-*.yml").as_posix()
-    for file in glob(path_pattern):
-        with open(file, "rb") as f:
-            buf = f.read()
-            hasher.update(buf)
+    with open(CI_FILE, "rb") as f:
+        buf = f.read()
+        hasher.update(buf)
 
     return hasher.hexdigest()
 
@@ -145,7 +175,7 @@ def main(fail_on_changes: bool) -> None:
         old_hash = get_yaml_files_hash()
 
     print("Reading data for generating")
-    with open(DATA_FOR_GENERATING, "r") as data_file:
+    with DATA_FOR_GENERATING.open("r") as data_file:
         data: list[MinecraftCoreData] = json.load(data_file)
 
     output = ""
@@ -157,7 +187,7 @@ def main(fail_on_changes: bool) -> None:
             service.attach_port(port)
             output += service.to_yaml() + "\n"
 
-    write_yaml_file(output)
+    FileWriter(output).write()
 
     if fail_on_changes:
         new_hash = get_yaml_files_hash()
@@ -174,7 +204,4 @@ def main(fail_on_changes: bool) -> None:
 
 
 if __name__ == "__main__":
-    fail_on_changes = (
-        True if len(sys.argv) == 2 and sys.argv[1] == "--fail-on-changes" else False
-    )
-    main(fail_on_changes)
+    main(fail_on_changes=True if len(sys.argv) == 2 and sys.argv[1] == "--fail-on-changes" else False)
