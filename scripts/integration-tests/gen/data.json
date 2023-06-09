@@ -13,6 +13,6 @@
         "env": {
             "TYPE": "PAPER"
         },
-        "options": ["--lol"]
+        "options": ["--lol", "--exit 0"]
     }
 ]

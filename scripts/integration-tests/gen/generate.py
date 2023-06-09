@@ -24,9 +24,10 @@ represent the current tox.ini file. (And if not the CI run fails.)
 
 
 TODO
-  - [ ] Write template for generating.
-  - [ ] Find what strings we need to replace.
-  - [ ] Replace strings.
+  - [x] Write template for generating.
+  - [x] Find what strings we need to replace.
+  - [x] Replace strings.
+  - [ ] Write somewhere ports.
   - [ ] Write `data.json` file for autogenerating.
 """
 from __future__ import annotations
@@ -54,11 +55,9 @@ if t.TYPE_CHECKING:
 else:
     MinecraftCoreData = {}
 
-CI_FILE = Path(__file__).resolve().parent.parent.parent / ".github" / "workflows" / "integration-tests.yml"
-TEMPLATE_DIR = Path(__file__).resolve().parent
-DATA_FOR_GENERATING = TEMPLATE_DIR / "data.json"
-TEMPLATE_FILE = TEMPLATE_DIR / "ci-yaml.txt"
-TEMPLATE_FILE_SERVICES = TEMPLATE_DIR / "ci-yaml-services.txt"
+CI_FILE = Path(__file__).resolve().parent.parent.parent.parent / ".github" / "workflows" / "integration-tests.yml"
+WORKING_DIR = Path(__file__).resolve().parent
+DATA_FOR_GENERATING = WORKING_DIR / "data.json"
 
 
 @dataclasses.dataclass
@@ -117,8 +116,8 @@ class ServiceInfo:
                 output += f"    {key}: {value}\n"
 
         if self.options:
-            output += "  options: >-\n            "
-            output += "\n            ".join(self.options) + "\n"
+            output += "  options: >-\n    "
+            output += "\n    ".join(self.options) + "\n"
 
         return output
 
@@ -186,6 +185,8 @@ def main(fail_on_changes: bool) -> None:
             ports.append(port := 25565 + len(ports))
             service.attach_port(port)
             output += service.to_yaml() + "\n"
+    if output.endswith("\n"):
+        output = output[:-1]
 
     FileWriter(output).write()
 
