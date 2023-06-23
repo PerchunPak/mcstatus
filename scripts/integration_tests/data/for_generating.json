@@ -5,6 +5,11 @@
         "versions": ["1.19", "1.12", "1.8"],
         "env": {
             "TYPE": "VANILLA"
+        },
+        "expected": {
+            "1.19": {"description": "1.19.4"},
+            "1.12": {"description": "1.12.2"},
+            "1.8": {"description": "1.8.9"}
         }
     },
     {
@@ -13,6 +18,7 @@
         "env": {
             "TYPE": "PAPER"
         },
-        "options": ["--lol", "--exit 0"]
+        "options": ["--lol", "--exit 0"],
+        "expected": {"description": "A Paper server"}
     }
 ]
