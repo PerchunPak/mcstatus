@@ -7,7 +7,13 @@ import typing_extensions as te
 from .generate import main as generate_logic
 from .testing import main as testing_logic
 
-app = typer.Typer()
+app = typer.Typer(help="""
+This is a script, that we use for integration testing.
+
+You need to write data for generating into 'data/for_generating.json' file.
+Do not touch the other file, 'data/for_testing.json', it needs to be generated via
+'python -m scripts.integration_tests generate' command.
+""")
 
 
 @app.command()

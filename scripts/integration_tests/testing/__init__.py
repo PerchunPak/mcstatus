@@ -13,7 +13,8 @@ import mcstatus
 
 from .. import CI_FILE, DATA_FOR_GENERATING_FILE, DATA_FOR_TESTING_FILE, PACKAGE_DIR
 from ..models import ServerForTesting
-from .comparer import Comparer, Difference
+from ..save_result import save_result
+from .comparer import Comparer, LIST_OF_DIFFERENCES, SubDifference
 
 console = Console()
 
@@ -23,7 +24,7 @@ def get_servers_to_ping() -> list[ServerForTesting]:
         return json.load(f)
 
 
-async def ping_port(port: int, expected: dict[str, t.Any]) -> t.Literal[False] | list[Difference]:
+async def ping_server(server_to_ping: ServerForTesting) -> t.Literal[False] | LIST_OF_DIFFERENCES:
     ip = "hypixel.net"  # todo actually ping port
     try:
         status = await (await mcstatus.JavaServer.async_lookup(ip)).async_status()
@@ -35,48 +36,64 @@ async def ping_port(port: int, expected: dict[str, t.Any]) -> t.Literal[False] |
         del actual[unwanted_field]
     del actual["raw"]["favicon"]
 
-    return Comparer(expected, actual).compare()
+    differences = Comparer(server_to_ping["expected"], actual).compare()
+    save_result(server_to_ping, actual, differences if differences != [] else None)
+    return differences
 
 
-def handle_results(tasks: set[asyncio.Task], _) -> dict[str, t.Literal[False] | list[Difference]]:
-    results: dict[str, t.Literal[False] | list[Difference]] = {}
+def handle_results(tasks: set[asyncio.Task], _) -> dict[str, t.Literal[False] | LIST_OF_DIFFERENCES]:
+    results: dict[str, t.Literal[False] | LIST_OF_DIFFERENCES] = {}
     for task in tasks:
         results[task.get_name()] = task.result()
     return results
 
 
-async def ping_servers(servers: list[ServerForTesting]) -> dict[str, t.Literal[False] | list[Difference]]:
+async def ping_servers(servers: list[ServerForTesting]) -> dict[str, t.Literal[False] | LIST_OF_DIFFERENCES]:
     return handle_results(
         *await asyncio.wait(
-            {
-                asyncio.create_task(ping_port(server_to_ping["port"], server_to_ping["expected"]), name=server_to_ping["id"])
-                for server_to_ping in servers
-            }
+            {asyncio.create_task(ping_server(server_to_ping), name=server_to_ping["id"]) for server_to_ping in servers}
         )
     )
 
 
-def print_results(results: dict[str, t.Literal[False] | list[Difference]], servers: list[ServerForTesting]) -> None:
-    table = Table(box=None, show_footer=True)
-    table.add_column("ID")
-    table.add_column("Port")
-    table.add_column("Result")
+def print_results(results: dict[str, t.Literal[False] | LIST_OF_DIFFERENCES], servers: list[ServerForTesting]) -> None:
+    table = Table("ID", "Port", "Result")
 
     for server_id, result in results.items():
         server = next(filter(lambda x: x["id"] == server_id, servers))
         table.add_row(server_id, str(server["port"]), "[green]OK" if result == [] else "[red]FAIL")
+
     console.print(table)
+
+    failed_servers = list(filter(lambda x: x[1] != [], results.items()))
+    print_failed_servers(failed_servers)
+
     print("Total failed servers: " + str(get_count_of_failed_servers(results)))
-    rich.print(list(results.values()))
 
 
-def get_count_of_failed_servers(results: dict[str, t.Literal[False] | list[Difference]]) -> int:
+def print_failed_servers(failed_servers: list[tuple[str, LIST_OF_DIFFERENCES]]) -> None:
+    sub_differences: list[tuple[str, LIST_OF_DIFFERENCES]] = []
+
+    for id, failed_server_differences in failed_servers:
+        table = Table("Key", "Expected", "Actual", title=id, show_lines=True)
+        for difference in failed_server_differences:
+            if isinstance(difference, SubDifference):
+                sub_differences.append((id + f".{difference.key}", difference.value))
+                continue
+            table.add_row(str(difference.key), str(difference.one), str(difference.two))
+        console.print(table)
+
+    if len(sub_differences) > 0:
+        print_failed_servers(sub_differences)
+
+
+def get_count_of_failed_servers(results: dict[str, t.Literal[False] | LIST_OF_DIFFERENCES]) -> int:
     return len(list(filter(lambda x: x != [], results.values())))
 
 
 async def main() -> int:
     servers = get_servers_to_ping()
-    results: dict[str, t.Literal[False] | list[Difference]] = {}
+    results: dict[str, t.Literal[False] | LIST_OF_DIFFERENCES] = {}
 
     to_process: list[ServerForTesting] = []
     for server in servers:
