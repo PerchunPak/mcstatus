@@ -73,7 +73,7 @@ jobs:
         shell: bash
         run: python -m scripts.integration_tests test
 
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
           name: results
           path: ./results
