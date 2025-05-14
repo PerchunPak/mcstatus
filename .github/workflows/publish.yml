@@ -43,7 +43,8 @@ jobs:
 
       - run: git tag
       - run: git describe
-      - run: git describe --tags
+      - run: git describe > /dev/null
+      - run: git describe 2> /dev/null
 
       - name: Setup uv
         uses: astral-sh/setup-uv@v6
