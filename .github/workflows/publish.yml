@@ -42,6 +42,8 @@ jobs:
           ref: ${{ steps.get_tag.outputs.tag }}
           fetch-depth: 0
 
+      - run: git tag
+
       - name: Setup uv
         uses: astral-sh/setup-uv@v6
         with:
@@ -88,6 +90,7 @@ jobs:
       id-token: write
 
     steps:
+      - run: exit 1
       - name: Download the distribution files from PR artifact
         uses: actions/download-artifact@v4
         with:
